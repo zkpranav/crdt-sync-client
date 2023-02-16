@@ -57,7 +57,7 @@ interface HierarchyInterface {
     addEntity(entity: Entity): boolean,
     deleteEntity(id: string): boolean,
     reparent(id: string, newParentId: string): boolean,
-    getData(id?: string): EntityInterface[]
+    getData(id?: string): string
 }
 
 class Hierarchy implements HierarchyInterface {
@@ -136,7 +136,7 @@ class Hierarchy implements HierarchyInterface {
         return false;
     }
 
-    getData(id?: string): EntityInterface[] {
+    getData(id?: string): string {
         const res = [];
         if (id) {
             res.push({...this.entities[id]});
@@ -146,7 +146,7 @@ class Hierarchy implements HierarchyInterface {
             }
         }
 
-        return res;
+        return JSON.stringify(res);
     }
 }
 

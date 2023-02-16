@@ -1,9 +1,10 @@
 import { io } from "socket.io-client";
-import { Hierarchy, EntityInterface, HierarchyInterface } from "./models/hierarchy";
+import { Hierarchy, HierarchyInterface, EntityInterface } from "./models/hierarchy";
 
 /**
  * Globals
  */
+let entityCounter = 0;
 let hierarchy: HierarchyInterface;
 
 // Establish connection
@@ -27,4 +28,42 @@ function initializeHierarchy(entities: EntityInterface[]) {
     for (let i = 1; i < entities.length; i++) {
         hierarchy.addEntity(entities[i]);
     }
+}
+
+/**
+ * User event handlers
+ */
+function handleCreateEntity() {
+    const id = `${socket.id}#${entityCounter}`;
+    const entity: EntityInterface = {
+        id: id,
+        relationship: {
+            parentId: hierarchy.rootId,
+            fractionalIndex: 0.0
+        },
+        properties: {}
+    };
+    entityCounter += 1;
+
+    if (hierarchy.addEntity(entity)) {
+        // Notify the server
+        const entityData = hierarchy.getData(id);
+        socket.emit("createEntity", entityData, (res) => {
+            if (res.status !== "Ok") {
+                // Rollback
+            }
+        });
+    }
+}
+
+function handleDeleteEntity() {
+    const id: string = "";
+    if (hierarchy.deleteEntity(id)) {
+        // Notify server
+        socket.emit("deleteEntity", id);
+    }
+}
+
+function handleReparentEntity() {
+
 }

@@ -82,7 +82,7 @@ var Hierarchy = /** @class */ (function () {
                 res.push(__assign({}, value));
             }
         }
-        return res;
+        return JSON.stringify(res);
     };
     return Hierarchy;
 }());
