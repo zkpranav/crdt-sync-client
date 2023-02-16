@@ -13,7 +13,6 @@ var __assign = (this && this.__assign) || function () {
 };
 exports.__esModule = true;
 exports.Hierarchy = exports.Entity = void 0;
-var tree_js_1 = require("../data-structures/tree.js");
 var Entity = /** @class */ (function () {
     function Entity(id, relationship, properties) {
         this.id = id;
@@ -32,44 +31,50 @@ var Hierarchy = /** @class */ (function () {
             parentId: rootId,
             fractionalIndex: 0.0
         }, {});
-        this.initializeTree();
     }
-    Hierarchy.prototype.initializeTree = function () {
-        this.tree = new tree_js_1.Tree(this.rootId);
-    };
     /**
      * Object creation & destruction
      */
     Hierarchy.prototype.addEntity = function (entity) {
-        if (this.tree.createNode(entity.id) &&
-            this.tree.reparent(entity.id, entity.relationship.parentId)) {
-            this.entities[entity.id] = new Entity(entity.id, entity.relationship, entity.properties);
-            return true;
+        if (entity.id in this.entities) {
+            return false;
         }
-        return false;
+        if (entity.id === entity.relationship.parentId || entity.id === entity.relationship.parentId) {
+            return false;
+        }
+        this.entities[entity.id] = new Entity(entity.id, entity.relationship, entity.properties);
+        return true;
     };
-    Hierarchy.prototype.deleteEntity = function (id) {
-        var _this = this;
-        var nodes = this.tree.deleteNode(id);
-        if (nodes.length) {
-            nodes.forEach(function (id) {
-                delete _this.entities[id];
-            });
-            return true;
+    // Entirely server authoritative
+    Hierarchy.prototype.deleteEntity = function (ids) {
+        for (var _i = 0, ids_1 = ids; _i < ids_1.length; _i++) {
+            var id = ids_1[_i];
+            delete this.entities[id];
         }
-        return false;
     };
-    Hierarchy.prototype.reparent = function (id, newParentId) {
-        // Perform reparenting in tree representation
-        if (this.tree.reparent(id, newParentId)) {
-            // TODO: Implement logic for fractional index
-            this.entities[id].relationship = {
-                parentId: newParentId,
-                fractionalIndex: 0.0
-            };
-            return true;
+    // Detach from hierarchy
+    Hierarchy.prototype.weakReparent = function (id, newParentId) {
+        if (!(id in this.entities) || !(newParentId in this.entities)) {
+            return false;
         }
-        return false;
+        if (id === this.rootId || id === newParentId) {
+            return false;
+        }
+        this.entities[id].relationship = {
+            parentId: newParentId,
+            fractionalIndex: 0.0
+        };
+        return true;
+    };
+    // Entirely server authoritative
+    Hierarchy.prototype.strongReparent = function (id, newParentId) {
+        if (!(id in this.entities) || !(newParentId in this.entities)) {
+            throw new Error("ID on server not on client. Entities out of sync.");
+        }
+        this.entities[id].relationship = {
+            parentId: newParentId,
+            fractionalIndex: 0.0
+        };
     };
     Hierarchy.prototype.getData = function (id) {
         var res = [];

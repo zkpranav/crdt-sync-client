@@ -3,6 +3,9 @@ exports.__esModule = true;
 var socket_io_client_1 = require("socket.io-client");
 var hierarchy_1 = require("./models/hierarchy");
 /**
+ * Types
+ */
+/**
  * Globals
  */
 var entityCounter = 0;
@@ -19,16 +22,34 @@ socket.on("connect", function () {
 socket.on("init", function (data) {
     initializeHierarchy(JSON.parse(data));
 });
+socket.on("createEntity", function (data) {
+    var entityData = JSON.parse(data)[0];
+    var res = hierarchy.addEntity(new hierarchy_1.Entity(entityData.id, {
+        parentId: entityData.relationship.parentId,
+        fractionalIndex: entityData.relationship.fractionalIndex
+    }, entityData.properties));
+    if (!res) {
+        throw new Error("Failed to add server entity");
+    }
+});
+socket.on("deleteEntity", function (ids) {
+    hierarchy.deleteEntity(ids);
+    console.log(hierarchy.getData());
+});
+socket.on("reparent", function (reparentData) {
+});
 function initializeHierarchy(entities) {
     hierarchy = new hierarchy_1.Hierarchy(entities[0].id);
     for (var i = 1; i < entities.length; i++) {
         hierarchy.addEntity(entities[i]);
     }
+    handleUserCreateEntity();
+    handleUserDeleteEntity("".concat(socket.id, "#").concat(entityCounter - 1));
 }
 /**
  * User event handlers
  */
-function handleCreateEntity() {
+function handleUserCreateEntity() {
     var id = "".concat(socket.id, "#").concat(entityCounter);
     var entity = {
         id: id,
@@ -43,18 +64,16 @@ function handleCreateEntity() {
         // Notify the server
         var entityData = hierarchy.getData(id);
         socket.emit("createEntity", entityData, function (res) {
+            console.log("Create entity status: " + res.status);
             if (res.status !== "Ok") {
                 // Rollback
             }
         });
     }
 }
-function handleDeleteEntity() {
-    var id = "";
-    if (hierarchy.deleteEntity(id)) {
-        // Notify server
-        socket.emit("deleteEntity", id);
-    }
+function handleUserDeleteEntity(temp) {
+    var id = temp;
+    socket.emit("deleteEntity", id);
 }
-function handleReparentEntity() {
+function handleUserReparentEntity() {
 }

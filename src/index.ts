@@ -1,5 +1,9 @@
 import { io } from "socket.io-client";
-import { Hierarchy, HierarchyInterface, EntityInterface } from "./models/hierarchy";
+import { Hierarchy, HierarchyInterface, EntityInterface, Entity } from "./models/hierarchy";
+
+/**
+ * Types
+ */
 
 /**
  * Globals
@@ -22,6 +26,34 @@ socket.on("init", (data) => {
     initializeHierarchy(JSON.parse(data));
 });
 
+socket.on("createEntity", (data) => {
+    const entityData = JSON.parse(data)[0];
+
+    const res = hierarchy.addEntity(new Entity(
+        entityData.id, {
+            parentId: entityData.relationship.parentId, 
+            fractionalIndex: entityData.relationship.fractionalIndex
+        }, 
+        entityData.properties
+    ));
+    if (!res) {
+        throw new Error("Failed to add server entity");
+    }
+});
+
+socket.on("deleteEntity", (ids: string[]) => {
+    hierarchy.deleteEntity(ids);
+
+    console.log(hierarchy.getData());
+});
+
+socket.on("reparent", (reparentData: {
+    id: string,
+    newParentId: string
+}) => {
+
+});
+
 function initializeHierarchy(entities: EntityInterface[]) {
     hierarchy = new Hierarchy(entities[0].id);
     
@@ -33,7 +65,7 @@ function initializeHierarchy(entities: EntityInterface[]) {
 /**
  * User event handlers
  */
-function handleCreateEntity() {
+function handleUserCreateEntity() {
     const id = `${socket.id}#${entityCounter}`;
     const entity: EntityInterface = {
         id: id,
@@ -56,14 +88,11 @@ function handleCreateEntity() {
     }
 }
 
-function handleDeleteEntity() {
+function handleUserDeleteEntity() {
     const id: string = "";
-    if (hierarchy.deleteEntity(id)) {
-        // Notify server
-        socket.emit("deleteEntity", id);
-    }
+    socket.emit("deleteEntity", id);
 }
 
-function handleReparentEntity() {
+function handleUserReparentEntity() {
 
 }

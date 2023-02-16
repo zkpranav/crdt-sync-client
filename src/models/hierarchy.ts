@@ -1,7 +1,5 @@
 /// <reference lib="es2017.object" />
 
-import { TreeInterface, Tree } from "../data-structures/tree.js";
-
 type Primitive = null | number | boolean | string;
 type JsonValue = Primitive | JsonArray | JsonObject;
 type JsonArray = JsonValue[];
@@ -53,10 +51,10 @@ interface HierarchyInterface {
     entities: {
         [key: string]: Entity
     },
-    tree: TreeInterface,
     addEntity(entity: Entity): boolean,
-    deleteEntity(id: string): boolean,
-    reparent(id: string, newParentId: string): boolean,
+    deleteEntity(ids: string[]): void,
+    weakReparent(id: string, newParentId: string): boolean,
+    strongReparent(id: string, newParentId: string): void,
     getData(id?: string): string
 }
 
@@ -69,7 +67,6 @@ class Hierarchy implements HierarchyInterface {
     entities: {
         [key: string]: Entity
     };
-    tree: TreeInterface;
 
     constructor(rootId: string) {
         // Initialize document w/ a mapping of document objects
@@ -83,57 +80,58 @@ class Hierarchy implements HierarchyInterface {
             },
             {}
         );
-
-        this.initializeTree();
-    }
-
-    initializeTree() {
-        this.tree = new Tree(this.rootId);
     }
 
     /**
      * Object creation & destruction
      */
     addEntity(entity: Entity): boolean {
-        if (
-            this.tree.createNode(entity.id) &&
-            this.tree.reparent(entity.id, entity.relationship.parentId)
-        ) {
-            this.entities[entity.id] = new Entity(entity.id, entity.relationship, entity.properties);
-            return true;
+        if (entity.id in this.entities) {
+            return false;
         }
 
-        return false;
+        if (entity.id === entity.relationship.parentId || entity.id === entity.relationship.parentId) {
+            return false;
+        }
+
+        this.entities[entity.id] = new Entity(entity.id, entity.relationship, entity.properties);
+        return true;
     }
 
-    deleteEntity(id: string): boolean {
-        const nodes = this.tree.deleteNode(id);
-        if (
-            nodes.length
-        ) {
-            nodes.forEach((id) => {
-                delete this.entities[id];
-            })
-            return true;
+    // Entirely server authoritative
+    deleteEntity(ids: string[]): void {
+        for (const id of ids) {
+            delete this.entities[id];
         }
-
-        return false;
     }
 
-    reparent(id: string, newParentId: string): boolean {
-        // Perform reparenting in tree representation
-        if (
-            this.tree.reparent(id, newParentId)
-        ) {
-            // TODO: Implement logic for fractional index
-            this.entities[id].relationship = {
-                parentId: newParentId,
-                fractionalIndex: 0.0
-            }
-            return true;
+    // Detach from hierarchy
+    weakReparent(id: string, newParentId: string): boolean {
+        if (!(id in this.entities) || !(newParentId in this.entities)) {
+            return false;
         }
 
-        return false;
+        if (id === this.rootId || id === newParentId) {
+            return false;
+        }
+
+        this.entities[id].relationship = {
+            parentId: newParentId,
+            fractionalIndex: 0.0
+        };
+        return true;
+    }
+
+    // Entirely server authoritative
+    strongReparent(id: string, newParentId: string): void {
+        if (!(id in this.entities) || !(newParentId in this.entities)) {
+            throw new Error("ID on server not on client. Entities out of sync.");
+        }
+
+        this.entities[id].relationship = {
+            parentId: newParentId,
+            fractionalIndex: 0.0
+        };
     }
 
     getData(id?: string): string {
