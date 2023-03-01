@@ -25,21 +25,28 @@ socket.on("init", (data: string) => {
 socket.on("createEntity", (data: string) => {
     // console.log("on createEntity: ");
     // console.log(`data: ${data}`);
+
     const entity = JSON.parse(data);
     hierarchy.ackAddEntity(entity[0]);
 });
 
 socket.on("deleteEntity", (ids: string[]) => {
-    console.log("on deleteEntity: ");
-    console.log(`data: ${ids}`);
+    // console.log("on deleteEntity: ");
+    // console.log(`data: ${ids}`);
+
+    ids.forEach((id) => {
+        hierarchy.ackDeleteEntity(id);
+    });
 });
 
 socket.on("reparentEntity", (reparentData: {
     id: string,
     newParentId: string
 }) => {
-    console.log("on reparentEntity");
-    console.log(`data: ${reparentData}`);
+    // console.log("on reparentEntity");
+    // console.log(`data: ${reparentData}`);
+
+    hierarchy.ackReparent(reparentData.id, reparentData.newParentId);
 });
 
 function initializeHierarchy(entities: EntityInterface[]) {
