@@ -1,137 +1,118 @@
 /// <reference lib="es2017.object" />
+import { io, Socket } from "socket.io-client";
 
 type Primitive = null | number | boolean | string;
 type JsonValue = Primitive | JsonArray | JsonObject;
 type JsonArray = JsonValue[];
 type JsonObject = {
-    [key: string]: JsonValue
-};
-
-type Relationship = {
-    parentId: string,
-    fractionalIndex: number
+	[key: string]: JsonValue;
 };
 
 interface EntityInterface {
-    id: string,
-    relationship: Relationship,
-    properties: JsonObject
+	id: string;
+	parentId: string;
+	value: number;
+}
+
+interface HierarchyInterface {
+    rootId: string;
+    entities: {
+        [key: string]: EntityInterface;
+    };
+
+    reqAddEntity(socket, id: string, value: number): void;
+    reqDeleteEntity(socket, id: string): void;
+    reqReparent(socket, id: string, newParentId: string): void;
+
+    ackAddEntity(entity: EntityInterface): void;
+    ackDeleteEntity(id: string): void;
+    ackReparent(id: string, newParentId: string): void;
 }
 
 class Entity implements EntityInterface {
-    /**
-     * id - object id which is a derivative of the client id that created it
-     * relationship - atomic object w/ parent & fractional index properties
-     * properties - property value pairs.
-     */
     id: string;
-    relationship: Relationship;
-    properties: JsonObject;
+    parentId: string;
+    value: number;
 
-
-    constructor(id: string, relationship: Relationship, properties: JsonObject) {
+    constructor(id: string, value: number) {
         this.id = id;
-        this.relationship = relationship;
-        this.properties = properties;
+        this.value = value;
     }
-
-    /**
-     * TODO -
-     * Sync object state over the network
-     * Optimize & send only the delta state
-     * Serialize data w/ protobuf & deserialize on the other end
-     */
-}
-
-/**
- * Server data model is governed entirely by its tree representation
- */
-interface HierarchyInterface {
-    rootId: string,
-    entities: {
-        [key: string]: Entity
-    },
-    addEntity(entity: Entity): boolean,
-    deleteEntity(ids: string[]): void,
-    weakReparent(id: string, newParentId: string): boolean,
-    strongReparent(id: string, newParentId: string): void,
-    getData(id?: string): string
 }
 
 class Hierarchy implements HierarchyInterface {
-    /**
-     * objects - array of all objects within the document fractionally indexed
-     * documentGraph - 2D array representation of the hierarchical structure of the document
-     */
     rootId: string;
     entities: {
-        [key: string]: Entity
+        [key: string]: EntityInterface;
     };
 
     constructor(rootId: string) {
-        // Initialize document w/ a mapping of document objects
         this.rootId = rootId;
         this.entities = {};
-        this.entities[rootId] = new Entity(
-            rootId,
-            {
-                parentId: rootId,
-                fractionalIndex: 0.0
-            },
-            {}
-        );
+
+        const root = new Entity(rootId, undefined);
+        root.parentId = rootId;
+        this.entities[rootId] = root;
     }
 
-    /**
-     * Object creation & destruction
-     */
-    addEntity(entity: Entity): boolean {
-        if (entity.id in this.entities) {
-            return false;
+    reqAddEntity(socket: any, id: string, value: number): void {
+        if (this.entities[id] !== undefined) {
+            return;
         }
 
-        if (entity.id === entity.relationship.parentId || entity.id === entity.relationship.parentId) {
-            return false;
-        }
-
-        this.entities[entity.id] = new Entity(entity.id, entity.relationship, entity.properties);
-        return true;
+        socket.emit("createEntity", [{id: id, value: value}], (res) => {
+            console.log(res.status);
+        });
     }
 
-    // Entirely server authoritative
-    deleteEntity(ids: string[]): void {
-        for (const id of ids) {
-            delete this.entities[id];
+    reqDeleteEntity(socket: any, id: string): void {
+        if (this.entities[id] === undefined) {
+            return;
         }
+
+        socket.emit("deleteEntity", id);
     }
 
-    // Detach from hierarchy
-    weakReparent(id: string, newParentId: string): boolean {
-        if (!(id in this.entities) || !(newParentId in this.entities)) {
-            return false;
+    reqReparent(socket: any, id: string, newParentId: string): void {
+        if (
+            this.entities[id] === undefined ||
+            this.entities[newParentId] === undefined ||
+            id === this.rootId ||
+            id === newParentId
+        ) {
+            return;
         }
 
-        if (id === this.rootId || id === newParentId) {
-            return false;
-        }
-
-        this.entities[id].relationship = {
-            parentId: newParentId,
-            fractionalIndex: 0.0
-        };
-        return true;
+        socket.emit("reparentEntity", { id: id, newParentId: newParentId });
     }
 
-    // Entirely server authoritative
-    strongReparent(id: string, newParentId: string): void {
-        if (!(id in this.entities) || !(newParentId in this.entities)) {
-            throw new Error("ID on server not on client. Entities out of sync.");
+    ackAddEntity(entity: EntityInterface): void {
+        if (this.entities[entity.id] !== undefined) {
+            throw new Error(`Entity: ${entity.id} should not exist, but does.`);
         }
 
-        this.entities[id].relationship = {
-            parentId: newParentId,
-            fractionalIndex: 0.0
-        };
+        const e = new Entity(entity.id, entity.value);
+        e.parentId = this.rootId;
+        this.entities[entity.id] = e;
+    }
+
+    ackDeleteEntity(id: string): void {
+        if (this.entities[id] === undefined) {
+            throw new Error(`Entity: ${id} should exist, but doesn't.`);
+        }
+
+        delete this.entities[id];
+    }
+
+    ackReparent(id: string, newParentId: string): void {
+        if (
+            this.entities[id] === undefined ||
+            this.entities[newParentId] === undefined
+        ) {
+            throw new Error(`Entities: ${id} & ${newParentId} should exist, but dont.`);
+        }
+
+        this.entities[id].parentId = newParentId;
     }
 
     getData(id?: string): string {
