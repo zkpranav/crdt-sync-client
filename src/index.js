@@ -3,9 +3,6 @@ exports.__esModule = true;
 var socket_io_client_1 = require("socket.io-client");
 var hierarchy_1 = require("./models/hierarchy");
 /**
- * Types
- */
-/**
  * Globals
  */
 var entityCounter = 0;
@@ -23,57 +20,40 @@ socket.on("init", function (data) {
     initializeHierarchy(JSON.parse(data));
 });
 socket.on("createEntity", function (data) {
-    var entityData = JSON.parse(data)[0];
-    var res = hierarchy.addEntity(new hierarchy_1.Entity(entityData.id, {
-        parentId: entityData.relationship.parentId,
-        fractionalIndex: entityData.relationship.fractionalIndex
-    }, entityData.properties));
-    if (!res) {
-        throw new Error("Failed to add server entity");
-    }
+    // console.log("on createEntity: ");
+    // console.log(`data: ${data}`);
+    var entity = JSON.parse(data);
+    hierarchy.ackAddEntity(entity[0]);
+    console.log(hierarchy.getData());
+    console.log("---------- ***** ----------");
 });
 socket.on("deleteEntity", function (ids) {
-    hierarchy.deleteEntity(ids);
-    console.log(hierarchy.getData());
+    console.log("on deleteEntity: ");
+    console.log("data: ".concat(ids));
 });
-socket.on("reparent", function (reparentData) {
+socket.on("reparentEntity", function (reparentData) {
+    console.log("on reparentEntity");
+    console.log("data: ".concat(reparentData));
 });
 function initializeHierarchy(entities) {
     hierarchy = new hierarchy_1.Hierarchy(entities[0].id);
     for (var i = 1; i < entities.length; i++) {
-        hierarchy.addEntity(entities[i]);
+        hierarchy.ackAddEntity(entities[i]);
     }
+    console.log(hierarchy.getData());
+    console.log("---------- ***** ----------");
     handleUserCreateEntity();
-    handleUserDeleteEntity("".concat(socket.id, "#").concat(entityCounter - 1));
 }
 /**
  * User event handlers
  */
 function handleUserCreateEntity() {
+    var value = 0;
     var id = "".concat(socket.id, "#").concat(entityCounter);
-    var entity = {
-        id: id,
-        relationship: {
-            parentId: hierarchy.rootId,
-            fractionalIndex: 0.0
-        },
-        properties: {}
-    };
     entityCounter += 1;
-    if (hierarchy.addEntity(entity)) {
-        // Notify the server
-        var entityData = hierarchy.getData(id);
-        socket.emit("createEntity", entityData, function (res) {
-            console.log("Create entity status: " + res.status);
-            if (res.status !== "Ok") {
-                // Rollback
-            }
-        });
-    }
+    hierarchy.reqAddEntity(socket, id, value);
 }
-function handleUserDeleteEntity(temp) {
-    var id = temp;
-    socket.emit("deleteEntity", id);
+function handleUserDeleteEntity() {
 }
 function handleUserReparentEntity() {
 }

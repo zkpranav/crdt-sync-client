@@ -2,14 +2,10 @@ import { io } from "socket.io-client";
 import { Hierarchy, HierarchyInterface, EntityInterface, Entity } from "./models/hierarchy";
 
 /**
- * Types
- */
-
-/**
  * Globals
  */
 let entityCounter = 0;
-let hierarchy: HierarchyInterface;
+let hierarchy: Hierarchy;
 
 // Establish connection
 const socket = io("ws://localhost:3000");
@@ -22,75 +18,56 @@ socket.on("connect", () => {
     socket.sendBuffer = [];
 });
 
-socket.on("init", (data) => {
+socket.on("init", (data: string) => {
     initializeHierarchy(JSON.parse(data));
 });
 
-socket.on("createEntity", (data) => {
-    const entityData = JSON.parse(data)[0];
-
-    const res = hierarchy.addEntity(new Entity(
-        entityData.id, {
-            parentId: entityData.relationship.parentId, 
-            fractionalIndex: entityData.relationship.fractionalIndex
-        }, 
-        entityData.properties
-    ));
-    if (!res) {
-        throw new Error("Failed to add server entity");
-    }
+socket.on("createEntity", (data: string) => {
+    // console.log("on createEntity: ");
+    // console.log(`data: ${data}`);
+    const entity = JSON.parse(data);
+    hierarchy.ackAddEntity(entity[0]);
 });
 
 socket.on("deleteEntity", (ids: string[]) => {
-    hierarchy.deleteEntity(ids);
-
-    console.log(hierarchy.getData());
+    console.log("on deleteEntity: ");
+    console.log(`data: ${ids}`);
 });
 
-socket.on("reparent", (reparentData: {
+socket.on("reparentEntity", (reparentData: {
     id: string,
     newParentId: string
 }) => {
-
+    console.log("on reparentEntity");
+    console.log(`data: ${reparentData}`);
 });
 
 function initializeHierarchy(entities: EntityInterface[]) {
     hierarchy = new Hierarchy(entities[0].id);
     
     for (let i = 1; i < entities.length; i++) {
-        hierarchy.addEntity(entities[i]);
+        hierarchy.ackAddEntity(entities[i]);
     }
+
+    console.log(hierarchy.getData());
+    console.log("---------- ***** ----------");
+
+    handleUserCreateEntity();
 }
 
 /**
  * User event handlers
  */
 function handleUserCreateEntity() {
+    const value = 0;
     const id = `${socket.id}#${entityCounter}`;
-    const entity: EntityInterface = {
-        id: id,
-        relationship: {
-            parentId: hierarchy.rootId,
-            fractionalIndex: 0.0
-        },
-        properties: {}
-    };
     entityCounter += 1;
 
-    if (hierarchy.addEntity(entity)) {
-        // Notify the server
-        const entityData = hierarchy.getData(id);
-        socket.emit("createEntity", entityData, (res) => {
-            if (res.status !== "Ok") {
-                // Rollback
-            }
-        });
-    }
+    hierarchy.reqAddEntity(socket, id, value);
 }
 
 function handleUserDeleteEntity() {
-    const id: string = "";
-    socket.emit("deleteEntity", id);
+    
 }
 
 function handleUserReparentEntity() {

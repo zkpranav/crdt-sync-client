@@ -1,5 +1,4 @@
 "use strict";
-/// <reference lib="es2017.object" />
 var __assign = (this && this.__assign) || function () {
     __assign = Object.assign || function(t) {
         for (var s, i = 1, n = arguments.length; i < n; i++) {
@@ -14,67 +13,65 @@ var __assign = (this && this.__assign) || function () {
 exports.__esModule = true;
 exports.Hierarchy = exports.Entity = void 0;
 var Entity = /** @class */ (function () {
-    function Entity(id, relationship, properties) {
+    function Entity(id, value) {
         this.id = id;
-        this.relationship = relationship;
-        this.properties = properties;
+        this.value = value;
     }
     return Entity;
 }());
 exports.Entity = Entity;
 var Hierarchy = /** @class */ (function () {
     function Hierarchy(rootId) {
-        // Initialize document w/ a mapping of document objects
         this.rootId = rootId;
         this.entities = {};
-        this.entities[rootId] = new Entity(rootId, {
-            parentId: rootId,
-            fractionalIndex: 0.0
-        }, {});
+        var root = new Entity(rootId, undefined);
+        root.parentId = rootId;
+        this.entities[rootId] = root;
     }
-    /**
-     * Object creation & destruction
-     */
-    Hierarchy.prototype.addEntity = function (entity) {
-        if (entity.id in this.entities) {
-            return false;
+    Hierarchy.prototype.reqAddEntity = function (socket, id, value) {
+        if (this.entities[id] !== undefined) {
+            return;
         }
-        if (entity.id === entity.relationship.parentId || entity.id === entity.relationship.parentId) {
-            return false;
-        }
-        this.entities[entity.id] = new Entity(entity.id, entity.relationship, entity.properties);
-        return true;
+        var data = JSON.stringify([{ id: id, value: value }]);
+        socket.emit("createEntity", data, function (res) {
+            console.log(res.status);
+        });
     };
-    // Entirely server authoritative
-    Hierarchy.prototype.deleteEntity = function (ids) {
-        for (var _i = 0, ids_1 = ids; _i < ids_1.length; _i++) {
-            var id = ids_1[_i];
-            delete this.entities[id];
+    Hierarchy.prototype.reqDeleteEntity = function (socket, id) {
+        if (this.entities[id] === undefined) {
+            return;
         }
+        socket.emit("deleteEntity", id);
     };
-    // Detach from hierarchy
-    Hierarchy.prototype.weakReparent = function (id, newParentId) {
-        if (!(id in this.entities) || !(newParentId in this.entities)) {
-            return false;
+    Hierarchy.prototype.reqReparent = function (socket, id, newParentId) {
+        if (this.entities[id] === undefined ||
+            this.entities[newParentId] === undefined ||
+            id === this.rootId ||
+            id === newParentId) {
+            return;
         }
-        if (id === this.rootId || id === newParentId) {
-            return false;
-        }
-        this.entities[id].relationship = {
-            parentId: newParentId,
-            fractionalIndex: 0.0
-        };
-        return true;
+        socket.emit("reparentEntity", { id: id, newParentId: newParentId });
     };
-    // Entirely server authoritative
-    Hierarchy.prototype.strongReparent = function (id, newParentId) {
-        if (!(id in this.entities) || !(newParentId in this.entities)) {
-            throw new Error("ID on server not on client. Entities out of sync.");
+    Hierarchy.prototype.ackAddEntity = function (entity) {
+        if (this.entities[entity.id] !== undefined) {
+            throw new Error("Entity: ".concat(entity.id, " should not exist, but does."));
         }
-        this.entities[id].relationship = {
-            parentId: newParentId,
-            fractionalIndex: 0.0
-        };
+        var e = new Entity(entity.id, entity.value);
+        e.parentId = this.rootId;
+        this.entities[entity.id] = e;
+    };
+    Hierarchy.prototype.ackDeleteEntity = function (id) {
+        if (this.entities[id] === undefined) {
+            throw new Error("Entity: ".concat(id, " should exist, but doesn't."));
+        }
+        delete this.entities[id];
+    };
+    Hierarchy.prototype.ackReparent = function (id, newParentId) {
+        if (this.entities[id] === undefined ||
+            this.entities[newParentId] === undefined) {
+            throw new Error("Entities: ".concat(id, " & ").concat(newParentId, " should exist, but dont."));
+        }
+        this.entities[id].parentId = newParentId;
     };
     Hierarchy.prototype.getData = function (id) {
         var res = [];

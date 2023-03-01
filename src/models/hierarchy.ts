@@ -60,7 +60,8 @@ class Hierarchy implements HierarchyInterface {
             return;
         }
 
-        socket.emit("createEntity", [{id: id, value: value}], (res) => {
+        const data = JSON.stringify([{id: id, value: value}]);
+        socket.emit("createEntity", data, (res) => {
             console.log(res.status);
         });
     }
